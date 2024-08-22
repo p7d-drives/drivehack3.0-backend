@@ -1,1 +1,4 @@
 cv2
+pathlib
+fastapi
+typing
