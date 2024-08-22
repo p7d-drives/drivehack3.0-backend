@@ -5,26 +5,17 @@ from fastapi import Header
 from fastapi import UploadFile
 from fastapi import File
 from fastapi.templating import Jinja2Templates
-import random
 
 from modules.GetFrameFromVideo import *
 from modules.GetVideoFrame import *
 from modules.ConvertLinesToArray import *
+from modules.GenerateRandomString import *
 
 from models.models import *
 
 from uuid import uuid4
 
 from typing import Annotated
-
-import cv2
-import string
-
-def RandomString():
-    answer = ""
-    for i in range(16):
-        answer += random.choice(string.ascii_letters + string.digits)
-    return answer + ".mp4"
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
@@ -94,5 +85,10 @@ async def Preview(request: Request):
     
 @app.post("/api/render/lines")
 async def GetLines(request: Request, lines: Lines):
+    cookie = request.cookies.get("cookie")
+    print(lines.lines)
+    if cookie == None:
+        return "You haven't sent any files"
     answer = ConvertLinesToArray(lines.lines)
+    print(answer)
     # connect with ML model
