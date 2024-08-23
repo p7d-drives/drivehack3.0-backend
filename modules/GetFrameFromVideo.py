@@ -8,6 +8,7 @@ def GetFrameFromVideo(PathToVideo : str, PathToFrame : str) -> str:
         success, image = VideoCapture.read()
         if not success:
             return ""
+        
         cv2.imwrite(f"{PathToFrame}{FrameName}.jpg", image)
         return f"{PathToFrame}{FrameName}.jpg"
     except:

@@ -68,7 +68,7 @@ async def Upload(response: Response, request: Request, file: Annotated[bytes, Fi
         sessions[user_uuid] = ""
         response.set_cookie(key = "cookie", value = user_uuid)
         cookie = user_uuid
-    filename = Path(VideoPath + RandomString())
+    filename = VideoPath + RandomString()
     print(cookie)
     sessions[cookie] = filename
     print(filename)
@@ -126,7 +126,7 @@ async def GetLines(request: Request, lines: Lines):
     filename_json = cookie + '.out.json'
 
     Popen(MODEL_RUN + ['-i', filename_in, '-o', VideoPath + '/' + os.path.basename(filename_out), '-j', JsonPath + '/' + os.path.basename(filename_json), '-L', cookie + '.lines.json'], shell=False)
-
+    sessions[cookie] = filename_out
     return 'ok'
 
 @app.get("/api/video/get/{user_uuid}")
