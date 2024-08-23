@@ -2,7 +2,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi import Request, Response, HTTPException
 from fastapi import Header
-from fastapi import UploadFile
+from fastapi.responses import RedirectResponse 
 from fastapi import File
 from fastapi.templating import Jinja2Templates
 
@@ -30,6 +30,7 @@ templates = Jinja2Templates(directory="templates")
 DEFAULTPATH = os.path.dirname(__file__)
 PathToFrame = DEFAULTPATH + "/preview/"
 VideoPath = DEFAULTPATH + "/video/"
+JsonPath = DEFAULTPATH + "/json/"
 
 sessions = {}
 
@@ -124,6 +125,11 @@ async def GetLines(request: Request, lines: Lines):
     filename_out = cookie + '.out'
     filename_json = cookie + '.out.json'
 
-    Popen(MODEL_RUN + ['-i', filename_in, '-o', filename_out, '-j', filename_json, '-L', cookie + '.lines.json'], shell=False)
+    Popen(MODEL_RUN + ['-i', filename_in, '-o', VideoPath + '/' + os.path.basename(filename_out), '-j', JsonPath + '/' + os.path.basename(filename_json), '-L', cookie + '.lines.json'], shell=False)
 
     return 'ok'
+
+@app.get("/api/video/get/{user_uuid}")
+async def ChangeCookie(response: Response, user_uuid):
+    response.set_cookie(key = "cookie", value = user_uuid)
+    return RedirectResponse("http://127.0.0.1/api/video/watch")
