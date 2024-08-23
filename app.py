@@ -144,14 +144,14 @@ async def GetLines(request: Request, lines: Lines):
     X, Y = GetChunkSize(sessions[cookie])
     for i in range(len(lines.lines)):
         lines.lines[i]["start"] = [lines.lines[i]["start"][0] * X, lines.lines[i]["start"][1] * Y]
-        lines.lines[i]["start"] = [lines.lines[i]["finish"][0] * X, lines.lines[i]["finish"][1] * Y]
-
+        lines.lines[i]["finish"] = [lines.lines[i]["finish"][0] * X, lines.lines[i]["finish"][1] * Y]
+    print(lines.lines)
         
     # connect with ML model
 
     with open(cookie + '.lines.json', 'w') as fp:
         import json
-        json.dump(lines, fp)  # ENSURE FORMAT
+        json.dump(lines.lines, fp)  # ENSURE FORMAT
 
     filename_in = cookie
     filename_out = cookie + '.out'
