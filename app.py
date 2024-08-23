@@ -60,6 +60,34 @@ async def video_endpoint(response: Response, request: Request, range: str = Head
 
     return Response(data, status_code=206, headers=headers,media_type="video/mp4")
 
+@app.get("/api/video/watch/out")
+async def video_endpoint(response: Response, request: Request, range: str = Header(None)):
+    cookie = request.cookies.get("cookie")
+
+    if cookie is None:
+        return Response("No files uploaded", status_code=500)
+
+
+    filename = VideoPath + '/' + cookie + '.out'
+    filesize = str(filename.stat().st_size)
+
+    WIDTH, HEIGHT = GetChunkSize(filename)
+    CHUNK_SIZE = WIDTH * HEIGHT
+
+    start, end = range.replace("bytes=", "").split("-")
+    start = int(start)
+    end = int(end) if end else start + CHUNK_SIZE
+    data = GetVideoFrame(filename, start, end)
+
+    headers = {
+        'Content-Range': f'bytes {str(start)}-{str(end)}/{filesize}',
+        'Accept-Ranges': 'bytes'
+    }
+
+    return Response(data, status_code=206, headers=headers,media_type="video/mp4")
+
+
+
 @app.post("/api/video/upload")
 async def Upload(response: Response, request: Request, file: Annotated[bytes, File()]):
     cookie = request.cookies.get("cookie")
@@ -113,8 +141,12 @@ async def GetLines(request: Request, lines: Lines):
     print(lines.lines)
     if cookie is None:
         return "You haven't sent any files"
-    answer = ConvertLinesToArray(lines.lines)
-    print(answer)
+    X, Y = GetChunkSize(sessions[cookie])
+    for i in range(len(lines.lines)):
+        lines.lines[i]["start"] = [lines.lines[i]["start"][0] * X, lines.lines[i]["start"][1] * Y]
+        lines.lines[i]["start"] = [lines.lines[i]["finish"][0] * X, lines.lines[i]["finish"][1] * Y]
+
+        
     # connect with ML model
 
     with open(cookie + '.lines.json', 'w') as fp:
@@ -126,7 +158,6 @@ async def GetLines(request: Request, lines: Lines):
     filename_json = cookie + '.out.json'
 
     Popen(MODEL_RUN + ['-i', filename_in, '-o', VideoPath + '/' + os.path.basename(filename_out), '-j', JsonPath + '/' + os.path.basename(filename_json), '-L', cookie + '.lines.json'], shell=False)
-    sessions[cookie] = filename_out
     return 'ok'
 
 @app.get("/api/video/get/{user_uuid}")
