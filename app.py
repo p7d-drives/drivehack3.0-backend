@@ -2,7 +2,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi import Request, Response, HTTPException
 from fastapi import Header
-from fastapi.responses import RedirectResponse 
+from fastapi.responses import RedirectResponse
 from fastapi import File
 from fastapi.templating import Jinja2Templates
 
@@ -19,11 +19,13 @@ from uuid import uuid4
 
 from typing import Annotated
 
+from stream import range_requests_response
+
 import os
 
 MODEL_RUN = ['/home/ninvoido/processor/venv/bin/python3', '/home/ninvoido/processor/lib.py', '--no-tqdm']
 
-app = FastAPI()
+app = FastAPI(title='p7dtTrm AI')
 
 templates = Jinja2Templates(directory="templates")
 
@@ -32,64 +34,83 @@ PathToFrame = DEFAULTPATH + "/preview/"
 VideoPath = DEFAULTPATH + "/video/"
 JsonPath = DEFAULTPATH + "/json/"
 
-sessions = {}
+OUT_SUFFIX = '.out.mp4'
+OUT_JSON_SUFFIX = '.out.json'
+LINES_JSON_SUFFIX = '.lines.json'
+
+sessions = {'loaded-video': '/home/ninvoido/drivehack3.0-backend/video/drivehack-1-60s.mp4'}
 
 @app.get("/api/video/watch")
 async def video_endpoint(response: Response, request: Request, range: str = Header(None)):
     cookie = request.cookies.get("cookie")
 
     if cookie is None:
-        return Response("No files uploaded", status_code=500)
+        return Response("No files uploaded", status_code=404)
 
 
-    filename = sessions[cookie]
+    filename = Path(sessions[cookie])
     filesize = str(filename.stat().st_size)
 
-    WIDTH, HEIGHT = GetChunkSize(filename)
-    CHUNK_SIZE = WIDTH * HEIGHT
+    # return range_requests_response(request, file_path=filename, content_type='video/mp4')
 
-    start, end = range.replace("bytes=", "").split("-")
-    start = int(start)
-    end = int(end) if end else start + CHUNK_SIZE
-    data = GetVideoFrame(filename, start, end)
+    fp = open(filename, 'rb').read()
+    return Response(content=fp, media_type='video/mp4')
 
-    headers = {
-        'Content-Range': f'bytes {str(start)}-{str(end)}/{filesize}',
-        'Accept-Ranges': 'bytes'
-    }
+    # WIDTH, HEIGHT = GetChunkSize(filename)
+    # CHUNK_SIZE = WIDTH * HEIGHT
 
-    return Response(data, status_code=206, headers=headers,media_type="video/mp4")
+    # start, end = range.replace("bytes=", "").split("-")
+    # start = int(start)
+    # end = int(end) if end else start + CHUNK_SIZE
+    # data = GetVideoFrame(filename, start, end)
+
+    # headers = {
+    #     'Content-Range': f'bytes {str(start)}-{str(end)}/{filesize}',
+    #     'Accept-Ranges': 'bytes'
+    # }
+
+    # return Response(data, status_code=206, headers=headers,media_type="video/mp4")
 
 @app.get("/api/video/watch/out")
-async def video_endpoint(response: Response, request: Request, range: str = Header(None)):
+async def output_video_endpoint(response: Response, request: Request, range: str = Header(None)):
     cookie = request.cookies.get("cookie")
 
     if cookie is None:
         return Response("No files uploaded", status_code=500)
 
 
-    filename = VideoPath + '/' + cookie + '.out'
-    filesize = str(filename.stat().st_size)
+    filename = Path(sessions[cookie] + OUT_SUFFIX)
+    while True:
+        try:
+            filesize = str(filename.stat().st_size)
+        except FileNotFoundError:
+            await asyncio.sleep(0.5)
+        else:
+            break
 
-    WIDTH, HEIGHT = GetChunkSize(filename)
-    CHUNK_SIZE = WIDTH * HEIGHT
+    fp = open(filename, 'rb').read()
 
-    start, end = range.replace("bytes=", "").split("-")
-    start = int(start)
-    end = int(end) if end else start + CHUNK_SIZE
-    data = GetVideoFrame(filename, start, end)
+    return Response(content=fp, media_type='video/mp4')
 
-    headers = {
-        'Content-Range': f'bytes {str(start)}-{str(end)}/{filesize}',
-        'Accept-Ranges': 'bytes'
-    }
+    # WIDTH, HEIGHT = GetChunkSize(filename)
+    # CHUNK_SIZE = WIDTH * HEIGHT
 
-    return Response(data, status_code=206, headers=headers,media_type="video/mp4")
+    # start, end = range.replace("bytes=", "").split("-")
+    # start = int(start)
+    # end = int(end) if end else start + CHUNK_SIZE
+    # data = GetVideoFrame(filename, start, end)
+
+    # headers = {
+    #     'Content-Range': f'bytes {str(start)}-{str(end)}/{filesize}',
+    #     'Accept-Ranges': 'bytes'
+    # }
+
+    # return Response(data, status_code=206, headers=headers,media_type="video/mp4")
 
 
 
 @app.post("/api/video/upload")
-async def Upload(response: Response, request: Request, file: Annotated[bytes, File()]):
+async def Upload_video(response: Response, request: Request, file: Annotated[bytes, File()]):
     cookie = request.cookies.get("cookie")
     if (cookie is None):
         user_uuid = str(uuid4())
@@ -109,7 +130,7 @@ async def Upload(response: Response, request: Request, file: Annotated[bytes, Fi
 
 
 @app.get("/api/video/preview")
-async def Preview(request: Request):
+async def Preview_video(request: Request):
     cookie = request.cookies.get("cookie")
     if (cookie is None):
         return "No file uploaded"
@@ -120,13 +141,13 @@ async def Preview(request: Request):
 
 
 @app.get("/api/video/data")
-async def get_data(request: Request):
+async def get_json_data(request: Request):
     cookie = request.cookies.get("cookie")
     if cookie is None:
         return "You haven't sent any files"
     # connect with ML model
 
-    filename_json = cookie + '.out.json'
+    filename_json = sessions[cookie] + OUT_JSON_SUFFIX
     if not os.path.exists(filename_json):
         raise HTTPException(status_code=404)
 
@@ -136,7 +157,7 @@ async def get_data(request: Request):
 
 
 @app.post("/api/render/lines")
-async def GetLines(request: Request, lines: Lines):
+async def set_zone_lines(request: Request, lines: Lines):
     cookie = request.cookies.get("cookie")
     print(lines.lines)
     if cookie is None:
@@ -146,21 +167,30 @@ async def GetLines(request: Request, lines: Lines):
         lines.lines[i]["start"] = [lines.lines[i]["start"][0] * X, lines.lines[i]["start"][1] * Y]
         lines.lines[i]["finish"] = [lines.lines[i]["finish"][0] * X, lines.lines[i]["finish"][1] * Y]
     print(lines.lines)
-        
+
     # connect with ML model
 
-    with open(cookie + '.lines.json', 'w') as fp:
+    with open(sessions[cookie] + LINES_JSON_SUFFIX, 'w') as fp:
         import json
         json.dump(lines.lines, fp)  # ENSURE FORMAT
 
-    filename_in = cookie
-    filename_out = cookie + '.out'
-    filename_json = cookie + '.out.json'
+    filename_in = sessions[cookie]
+    filename_out = filename_in + OUT_SUFFIX
+    filename_json = filename_in + OUT_JSON_SUFFIX
 
-    Popen(MODEL_RUN + ['-i', filename_in, '-o', VideoPath + '/' + os.path.basename(filename_out), '-j', JsonPath + '/' + os.path.basename(filename_json), '-L', cookie + '.lines.json'], shell=False)
+    Popen(MODEL_RUN + ['-i', filename_in, '-o', filename_out, '-j', filename_json, '-L', sessions[cookie] + LINES_JSON_SUFFIX], shell=False)
     return 'ok'
 
 @app.get("/api/video/get/{user_uuid}")
-async def ChangeCookie(response: Response, user_uuid):
+async def get_video_by_uuid(response: Response, user_uuid):
     response.set_cookie(key = "cookie", value = user_uuid)
-    return RedirectResponse("http://127.0.0.1/api/video/watch")
+    return RedirectResponse("/api/video/watch/out")
+
+
+@app.get("/api/video/get_by_key/{user_key}")
+async def get_video_by_uuid(response: Response, user_key):
+    key = str(uuid4())
+    sessions[key] = VideoPath + user_key + '.mp4'
+    print(key)
+    response.set_cookie(key = "cookie", value = key)
+    return 'ok'
